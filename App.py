@@ -1,115 +1,85 @@
 import streamlit as st
 import urllib.parse
 import base64
+import re
 
-# Cấu hình Streamlit
-st.set_page_config(page_title="Tự động tìm kiếm Sci-Hub", layout="centered")
+# ───────────────────────── 0. UI & ảnh nền ─────────────────────────
+st.set_page_config(page_title="Tự động mở DOI/PMID trên Sci-Hub", layout="centered")
 
-# === Load ảnh nền ===
-# Giả sử file ảnh a1.png tồn tại trong cùng thư mục
-# Nếu không, cần cung cấp đường dẫn đúng hoặc xử lý lỗi
-try:
-    def get_base64_image(image_path):
-        with open(image_path, "rb") as img_file:
-            encoded = base64.b64encode(img_file.read()).decode()
-            return f"data:image/png;base64,{encoded}"
-    img_base64 = get_base64_image("a1.png")
-except FileNotFoundError:
-    img_base64 = "" # Không có ảnh nền nếu file không tìm thấy
-    st.warning("Không tìm thấy file ảnh nền 'a1.png'. Bỏ qua ảnh nền.")
-
-# === CSS giao diện đẹp + ảnh nền ===
-st.markdown(
-    f"""
-    <style>
-    html, body, .stApp {{
-        margin: 0;
-        padding: 0;
-        height: 100%;
-    }}
-
-    body {{
-        background-image: url("{img_base64}");
-        background-size: cover;
-        background-repeat: no-repeat;
-        background-attachment: fixed;
-        background-position: 50% 50%;
-    }}
-
-    header {{
-        visibility: hidden;
-        height: 0px;
-    }}
-
-    .stApp {{
-        backdrop-filter: blur(8px);
-        background-color: rgba(0, 0, 0, 0.4);
-        color: #fff;
-    }}
-
-    h1, h2, h3, h4, h5, h6, label, .stText, .stMarkdown {{
-        color: #ffffff !important;
-    }}
-
-    textarea, .stTextArea textarea {{
-        background-color: rgba(255, 255, 255, 0.9) !important;
-        color: #000000 !important;
-        font-weight: 500;
-    }}
-
-    .stButton > button {{
-        background-color: #ffffff !important;
-        color: #000000 !important;
-        font-weight: bold;
-        border: 2px solid #aaa;
-    }}
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# === Giao diện người dùng ===
-st.title("Tự động mở nhiều từ khoá trên Sci-Hub")
-
-keywords_input = st.text_area(
-    "Nhập từ khóa/DOI/PMID tại đây (mỗi dòng là 1 mục):",
-    placeholder="Mỗi từ khoá, DOI hoặc PMID là 1 dòng nha mọi người",
-    height=200
-)
-
-# === Nút tạo danh sách link tìm kiếm ===
-if st.button("🔍Đã nhập đủ (Tạo liên kết Sci-Hub)"):
-    keywords = [kw.strip() for kw in keywords_input.splitlines() if kw.strip()]
-    if not keywords:
-        st.warning("⚠️ Vui lòng nhập ít nhất một từ khóa, DOI hoặc PMID.")
-    else:
-        st.session_state.links = [
-            {
-                "keyword": kw,
-                # Thay đổi URL đích sang Sci-Hub
-                # Sci-Hub thường nhận truy vấn trực tiếp sau tên miền
-                "url": f"https://www.sci-hub.se/{urllib.parse.quote_plus(kw)}"
-            }
-            for kw in keywords
-        ]
-        st.success(f"Đã tạo {len(st.session_state.links)} liên kết Sci-Hub. Hãy ấn nút bên dưới để mở tất cả trong tab mới.")
-        st.info("Lưu ý: Sci-Hub hoạt động tốt nhất với DOI hoặc PMID. Kết quả tìm kiếm theo từ khóa có thể không như mong đợi.")
-
-# === Nếu đã có link thì hiển thị nút mở tất cả và danh sách ===
-if 'links' in st.session_state and st.session_state.links:
-    if st.button("🚀 Mở tất cả liên kết trong tab mới"):
-        all_scripts = "\n".join([
-            f'<script>window.open("{item["url"]}", "_blank", "noopener")</script>'
-            for item in st.session_state.links
-        ])
-        st.components.v1.html(all_scripts, height=0)
-
-    # Giữ nguyên cảnh báo về pop-up và hình ảnh minh họa
-    st.warning("""⚠️Lưu ý nếu lúc sử dụng web này mà thông báo hiện biểu tượng chặn mở tab mới (như hình dưới). Hãy chọn 'Allow pop-ups' để cho phép tự động mở trang mới tài liệu. ⚠️
-Ngoài ra ai sử dụng web bằng điện thoại app Chrome, Sarafi,... thì sẽ hiện thông báo cho phép mở trang thì mọi người nhớ chọn cho phép nhé""")
-    # Giả sử file ảnh a2.png tồn tại trong cùng thư mục
+def img_to_b64(path: str) -> str:
     try:
-        st.image("a2.png", caption="Hình minh họa pop-up bị chặn", width=600)
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
     except FileNotFoundError:
-        st.warning("Không tìm thấy file ảnh minh họa 'a2.png'.")
+        return ""
 
+bg_data = img_to_b64("a1.png")          # (tùy chọn) đặt BACKGROUND
+st.markdown(f"""
+<style>
+html,body,.stApp{{height:100%;margin:0}}
+body{{background:url("data:image/png;base64,{bg_data}") center/cover fixed}}
+.stApp{{backdrop-filter:blur(6px);background:rgba(0,0,0,.35);color:#fff}}
+h1,h2,h3,h4,h5,h6,label,.stMarkdown{{color:#fff!important}}
+textarea{{background:rgba(255,255,255,.9)!important;color:#000;font-weight:500}}
+.stButton>button{{background:#fff!important;color:#000!important;font-weight:600}}
+</style>
+""", unsafe_allow_html=True)
+
+# ───────────────────────── 1. Hàm tiện ích ─────────────────────────
+SCI_HUB = "https://sci-hub.se"          # thay mirror nếu cần
+
+def clean(q: str) -> str:
+    q = q.strip()
+    q = re.sub(r"https?://doi\.org/", "", q, flags=re.I)
+    if q.lower().startswith("doi:"):
+        q = q[4:]
+    return q
+
+def make_url(q: str) -> str:
+    return f"{SCI_HUB}/{urllib.parse.quote(clean(q), safe='/')}"
+
+# ───────────────────────── 2. Giao diện ─────────────────────────
+st.title("Tự động mở nhiều DOI/PMID trên Sci-Hub")
+
+raw = st.text_area(
+    "Nhập DOI/PMID (mỗi dòng một mục):",
+    height=200,
+    placeholder="10.1007/978-1-61779-624-1_9\nPMID: 12345678",
+)
+
+if st.button("🔍  Tạo liên kết Sci-Hub"):
+    entries = [e for e in (i.strip() for i in raw.splitlines()) if e]
+    if not entries:
+        st.warning("⚠️ Vui lòng nhập ít nhất một DOI/PMID.")
+    else:
+        st.session_state.links = [{"kw": e, "url": make_url(e)} for e in entries]
+        st.success(f"Đã tạo {len(entries)} liên kết.")
+
+# ───────────────────────── 3. Mở đồng loạt các tab ─────────────────────────
+if "links" in st.session_state and st.session_state.links:
+    if st.button("🚀  Mở tất cả trong tab mới (đồng thời)"):
+        # JS: mỗi DOI → 1 tab, tất cả thực thi ngay lập tức
+        urls = ",".join(f'"{d["url"]}"' for d in st.session_state.links)
+        js = f"""
+        <script>
+        const sciHubHome = "{SCI_HUB}";
+        const targets = [{urls}];
+
+        targets.forEach(target => {{
+            // ① mở about:blank để giữ handle tab
+            const tab = window.open("about:blank", "_blank");
+            // ② nạp trang chủ Sci-Hub để nhận cookie
+            tab.location = sciHubHome;
+            // ③ sau 1,2 s chuyển luôn tới DOI
+            setTimeout(() => {{ tab.location = target; }}, 1200);
+        }});
+        </script>
+        """
+        st.components.v1.html(js, height=0)
+
+    st.warning("Nếu trình duyệt chặn pop-up, hãy **Allow pop-ups** để code hoạt động.")
+
+    try:
+        st.image("a2.png", caption="Cho phép pop-up để tự mở tab", width=600)
+    except FileNotFoundError:
+        pass
