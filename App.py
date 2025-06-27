@@ -26,7 +26,7 @@ textarea{{background:rgba(255,255,255,.9)!important;color:#000;font-weight:500}}
 """, unsafe_allow_html=True)
 
 # ───────────────────────── 1. Hàm tiện ích ─────────────────────────
-SCI_HUB = "https://sci-hub.se"          # thay mirror nếu cần
+SCI_HUB = "https://sci-hub.ru"          # thay mirror nếu cần
 
 def clean(q: str) -> str:
     q = q.strip()
